@@ -69,23 +69,33 @@ class FrozenBatchNorm2d(nn.Module):
     ):
         version = local_metadata.get("version", None)
 
-        if version is None or version < 2:
-            # No running_mean/var in early versions
-            # This will silent the warnings
+        if version is None:
+            # keep the origin key if version is None
             if prefix + "running_mean" not in state_dict:
-                state_dict[prefix + "running_mean"] = torch.zeros_like(self.running_mean)
+                state_dict[prefix + "running_mean"] = self.running_mean.clone().detach()
             if prefix + "running_var" not in state_dict:
-                state_dict[prefix + "running_var"] = torch.ones_like(self.running_var)
+                state_dict[prefix + "running_var"] = self.running_var.clone().detach()
+        else:
+            if version < 2:
+                # No running_mean/var in early versions
+                # This will silent the warnings
+                if prefix + "running_mean" not in state_dict:
+                    state_dict[prefix + "running_mean"] = torch.zeros_like(self.running_mean)
+                if prefix + "running_var" not in state_dict:
+                    state_dict[prefix + "running_var"] = torch.ones_like(self.running_var)
 
-        if version is not None and version < 3:
-            logger = logging.getLogger(__name__)
-            logger.info("FrozenBatchNorm {} is upgraded to version 3.".format(prefix.rstrip(".")))
-            # In version < 3, running_var are used without +eps.
-            state_dict[prefix + "running_var"] -= self.eps
+            if version < 3:
+                logger = logging.getLogger(__name__)
+                logger.info(
+                    "FrozenBatchNorm {} is upgraded to version 3.".format(prefix.rstrip("."))
+                )
+                # In version < 3, running_var are used without +eps.
+                state_dict[prefix + "running_var"] -= self.eps
 
-        super()._load_from_state_dict(
-            state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
-        )
+            super()._load_from_state_dict(
+                state_dict, prefix, local_metadata, strict,
+                missing_keys, unexpected_keys, error_msgs
+            )
 
     def __repr__(self):
         return "FrozenBatchNorm2d(num_features={}, eps={})".format(self.num_features, self.eps)
